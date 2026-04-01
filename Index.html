@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Einkauf App UX Pro</title>
+<style>
+body { margin:0; font-family:Arial; background:#0f0f0f; color:#fff; }
+header { padding:15px; text-align:center; background:#1c1c1c; font-size:20px; }
+.container { padding:10px; }
+
+h3 { margin:10px 0 5px; }
+
+.grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(90px,1fr)); gap:10px; }
+
+.tile {
+  background:#1c1c1c;
+  border-radius:15px;
+  padding:10px;
+  text-align:center;
+  cursor:pointer;
+  font-size:12px;
+  position:relative;
+}
+
+.tile.done { opacity:0.4; text-decoration: line-through; }
+.tile.favorite { outline:2px solid gold; }
+
+.icon { font-size:24px; display:block; margin-bottom:5px; }
+
+.category h4 {
+  margin:10px 0;
+  cursor:pointer;
+}
+
+input { width:100%; padding:10px; margin:5px 0; border:none; border-radius:10px; background:#1f1f1f; color:#fff; }
+button { padding:10px; border:none; border-radius:10px; margin:5px 0; cursor:pointer; }
+.primary { background:#ff6f00; }
+.danger { background:#c62828; }
+
+</style>
+</head>
+<body>
+<header>🛒 Einkauf UX</header>
+
+<div class="container">
+
+<h3>💰 Budget</h3>
+<input id="budget" type="number" placeholder="Max Budget €" oninput="updateRest()" />
+<div>Kasse: <span id="real">0.00</span> € | Rest: <span id="rest">0.00</span> €</div>
+
+<h3>🧮 Kasse</h3>
+<input id="calc" type="number" placeholder="Preis" />
+<button onclick="addCalc()">+</button>
+<button onclick="resetCalc()" class="danger">Reset</button>
+
+<h3>📦 Kategorien</h3>
+<div id="catalog"></div>
+
+<h3>⭐ Favoriten</h3>
+<div id="favorites" class="grid"></div>
+
+<h3>📋 Einkaufsliste</h3>
+<div id="list" class="grid"></div>
+
+</div>
+
+<script>
+const products = [
+{n:'Milch',i:'🥛',c:'Kühl'}, {n:'Käse',i:'🧀',c:'Kühl'},
+{n:'Apfel',i:'🍎',c:'Obst'}, {n:'Banane',i:'🍌',c:'Obst'},
+{n:'Brot',i:'🍞',c:'Bäckerei'},
+{n:'Fleisch',i:'🥩',c:'Fleisch'},
+{n:'Nudeln',i:'🍝',c:'Trocken'},
+{n:'Wasser',i:'💧',c:'Getränke'},
+{n:'Kaffee',i:'☕',c:'Getränke'},
+{n:'Waschmittel',i:'🧴',c:'Haushalt'}
+];
+
+let list = JSON.parse(localStorage.getItem('list')||'[]');
+let favorites = JSON.parse(localStorage.getItem('favorites')||'[]');
+let real = 0;
+
+function renderCatalog(){
+  const el=document.getElementById('catalog'); el.innerHTML='';
+  const cats={};
+  products.forEach(p=>{
+    if(!cats[p.c]) cats[p.c]=[];
+    cats[p.c].push(p);
+  });
+
+  Object.keys(cats).forEach(cat=>{
+    const box=document.createElement('div'); box.className='category';
+    const title=document.createElement('h4');
+    title.textContent=cat;
+
+    const grid=document.createElement('div'); grid.className='grid';
+
+    title.onclick=()=>{
+      grid.style.display = grid.style.display==='none'?'grid':'none';
+    };
+
+    cats[cat].forEach(p=>{
+      const d=document.createElement('div'); d.className='tile';
+      d.innerHTML=`<span class='icon'>${p.i}</span>${p.n}`;
+
+      // swipe detection
+      let startX=0;
+      d.addEventListener('touchstart',e=>startX=e.touches[0].clientX);
+      d.addEventListener('touchend',e=>{
+        let dx=e.changedTouches[0].clientX-startX;
+        if(dx>50) toggleFavorite(p);
+        else if(dx<-50) add(p);
+      });
+
+      d.onclick=()=>add(p);
+      grid.appendChild(d);
+    });
+
+    box.appendChild(title);
+    box.appendChild(grid);
+    el.appendChild(box);
+  });
+}
+
+function add(p){
+  list.push({...p,done:false});
+  save();
+}
+
+function toggle(i){
+  list[i].done=!list[i].done;
+  save();
+}
+
+function renderList(){
+  listEl.innerHTML='';
+  list.forEach((p,i)=>{
+    const d=document.createElement('div');
+    d.className='tile '+(p.done?'done':'');
+    d.innerHTML=`<span class='icon'>${p.i}</span>${p.n}`;
+
+    let startX=0;
+    d.addEventListener('touchstart',e=>startX=e.touches[0].clientX);
+    d.addEventListener('touchend',e=>{
+      let dx=e.changedTouches[0].clientX-startX;
+      if(dx>50) toggle(i);
+      else if(dx<-50) remove(i);
+    });
+
+    d.onclick=()=>toggle(i);
+    listEl.appendChild(d);
+  });
+}
+
+function remove(i){
+  list.splice(i,1);
+  save();
+}
+
+function toggleFavorite(p){
+  const exists = favorites.find(f=>f.n===p.n);
+  if(exists){
+    favorites = favorites.filter(f=>f.n!==p.n);
+  } else {
+    favorites.push(p);
+  }
+  localStorage.setItem('favorites',JSON.stringify(favorites));
+  renderFavorites();
+}
+
+function renderFavorites(){
+  favEl.innerHTML='';
+  favorites.forEach(p=>{
+    const d=document.createElement('div');
+    d.className='tile favorite';
+    d.innerHTML=`<span class='icon'>${p.i}</span>${p.n}`;
+    d.onclick=()=>add(p);
+    favEl.appendChild(d);
+  });
+}
+
+function save(){
+  localStorage.setItem('list',JSON.stringify(list));
+  renderList();
+}
+
+function addCalc(){
+  real += parseFloat(calc.value)||0;
+  realEl.textContent = real.toFixed(2);
+  calc.value='';
+  updateRest();
+}
+
+function resetCalc(){ real=0; realEl.textContent='0.00'; updateRest(); }
+
+function updateRest(){
+  const b=parseFloat(budget.value)||0;
+  restEl.textContent=(b-real).toFixed(2);
+}
+
+const listEl=document.getElementById('list');
+const favEl=document.getElementById('favorites');
+const realEl=document.getElementById('real');
+const restEl=document.getElementById('rest');
+
+renderCatalog(); renderList(); renderFavorites(); updateRest();
+</script>
+</body>
+</html>
