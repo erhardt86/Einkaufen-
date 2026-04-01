@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Einkaufsliste</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #ff6b35;
+      color: white;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 { font-size: 1.4rem; font-weight: 700; }
+
+    #sync-indicator {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #ccc;
+      transition: background 0.3s;
+    }
+    #sync-indicator.online  { background: #4caf50; }
+    #sync-indicator.syncing { background: #ff9800; }
+
+    .input-area {
+      display: flex;
+      gap: 8px;
+      padding: 16px;
+      background: white;
+      border-bottom: 1px solid #eee;
+    }
+
+    #item-input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 2px solid #eee;
+      border-radius: 50px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #item-input:focus { border-color: #ff6b35; }
+
+    #add-btn {
+      background: #ff6b35;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 46px; height: 46px;
+      font-size: 1.5rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.1s, background 0.2s;
+    }
+    #add-btn:hover  { background: #e55a25; }
+    #add-btn:active { transform: scale(0.92); }
+
+    .list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px 4px;
+    }
+    .list-header span { font-size: 0.85rem; color: #999; }
+    #clear-done {
+      font-size: 0.8rem; color: #ff6b35;
+      background: none; border: none; cursor: pointer;
+    }
+
+    #item-list { padding: 8px 16px 100px; }
+
+    .item-card {
+      background: white;
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      transition: opacity 0.2s, transform 0.2s;
+      animation: slideIn 0.2s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .item-card.done { opacity: 0.45; }
+    .item-card.done .item-name { text-decoration: line-through; color: #aaa; }
+
+    .check-btn {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      border: 2.5px solid #ddd;
+      background: none;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .item-card.done .check-btn {
+      background: #4caf50;
+      border-color: #4caf50;
+      color: white;
+    }
+    .check-btn::after { content: '✓'; font-size: 0.9rem; color: transparent; }
+    .item-card.done .check-btn::after { color: white; }
+
+    .item-name {
+      flex: 1;
+      font-size: 1rem;
+      color: #222;
+    }
+
+    .item-qty {
+      font-size: 0.85rem;
+      color: #ff6b35;
+      background: #fff0eb;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+
+    .delete-btn {
+      background: none; border: none;
+      color: #ccc; font-size: 1.2rem;
+      cursor: pointer; padding: 4px;
+      transition: color 0.2s;
+    }
+    .delete-btn:hover { color: #e53935; }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #bbb;
+    }
+    .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+    .empty-state p { font-size: 0.95rem; }
+
+    /* Modal for qty */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 20px 20px 0 0;
+      padding: 24px;
+      width: 100%; max-width: 480px;
+    }
+    .modal h3 { margin-bottom: 16px; color: #333; }
+    .modal input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #eee;
+      border-radius: 10px;
+      font-size: 1rem;
+      margin-bottom: 12px;
+      outline: none;
+    }
+    .modal input:focus { border-color: #ff6b35; }
+    .modal-btns { display: flex; gap: 10px; }
+    .modal-btns button {
+      flex: 1; padding: 12px;
+      border-radius: 10px; border: none;
+      font-size: 1rem; cursor: pointer;
+    }
+    #modal-cancel { background: #f5f5f5; color: #555; }
+    #modal-confirm { background: #ff6b35; color: white; }
+
+    /* Category chips */
+    .category-bar {
+      display: flex;
+      gap: 8px;
+      padding: 10px 16px;
+      overflow-x: auto;
+      background: white;
+      border-bottom: 1px solid #eee;
+    }
+    .category-bar::-webkit-scrollbar { display: none; }
+    .chip {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1.5px solid #eee;
+      background: white;
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .chip.active {
+      background: #ff6b35;
+      border-color: #ff6b35;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🛒 Einkaufsliste</h1>
+  <div id="sync-indicator" title="Sync-Status"></div>
+</header>
+
+<!-- Kategorie-Filter -->
+<div class="category-bar">
+  <button class="chip active" data-cat="all">Alle</button>
+  <button class="chip" data-cat="Obst & Gemüse">🥦 Obst & Gemüse</button>
+  <button class="chip" data-cat="Milchprodukte">🧀 Milch & Käse</button>
+  <button class="chip" data-cat="Fleisch">🥩 Fleisch</button>
+  <button class="chip" data-cat="Getränke">🥤 Getränke</button>
+  <button class="chip" data-cat="Haushalt">🧹 Haushalt</button>
+  <button class="chip" data-cat="Sonstiges">📦 Sonstiges</button>
+</div>
+
+<!-- Eingabe -->
+<div class="input-area">
+  <input id="item-input" type="text" placeholder="Artikel hinzufügen…" autocomplete="off" />
+  <button id="add-btn">+</button>
+</div>
+
+<div class="list-header">
+  <span id="item-count">0 Artikel</span>
+  <button id="clear-done">Erledigte löschen</button>
+</div>
+
+<div id="item-list"></div>
+
+<!-- Mengen-Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Artikel hinzufügen</h3>
+    <input id="modal-name" type="text" placeholder="Artikelname" />
+    <input id="modal-qty"  type="text" placeholder="Menge (z.B. 2 Stk, 500g)" />
+    <select id="modal-cat" style="width:100%;padding:12px 16px;border:2px solid #eee;border-radius:10px;font-size:1rem;margin-bottom:12px;outline:none;">
+      <option value="Sonstiges">📦 Sonstiges</option>
+      <option value="Obst & Gemüse">🥦 Obst & Gemüse</option>
+      <option value="Milchprodukte">🧀 Milch & Käse</option>
+      <option value="Fleisch">🥩 Fleisch</option>
+      <option value="Getränke">🥤 Getränke</option>
+      <option value="Haushalt">🧹 Haushalt</option>
+    </select>
+    <div class="modal-btns">
+      <button id="modal-cancel">Abbrechen</button>
+      <button id="modal-confirm">Hinzufügen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "[gstatic.com](https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js)";
+  import {
+    getDatabase, ref, push, onValue, update, remove, query, orderByChild
+  } from "[gstatic.com](https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js)";
+
+  // ── 🔧 DEINE FIREBASE-CONFIG HIER EINTRAGEN ──────────────────────────────
+  const firebaseConfig = {
+    apiKey:            "DEIN_API_KEY",
+    authDomain:        "DEIN_PROJEKT.firebaseapp.com",
+    databaseURL:       "[dein_projekt-default-rtdb.europe-west1.firebasedatabase.app](https://DEIN_PROJEKT-default-rtdb.europe-west1.firebasedatabase.app)",
+    projectId:         "DEIN_PROJEKT",
+    storageBucket:     "DEIN_PROJEKT.appspot.com",
+    messagingSenderId: "DEINE_SENDER_ID",
+    appId:             "DEINE_APP_ID"
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getDatabase(app);
+  const listRef = ref(db, 'einkaufsliste');
+
+  // ── State ────────────────────────────────────────────────────────────────
+  let items = {};
+  let activeCategory = 'all';
+  let pendingName = '';
+
+  // ── DOM ──────────────────────────────────────────────────────────────────
+  const itemInput   = document.getElementById('item-input');
+  const addBtn      = document.getElementById('add-btn');
+  const itemList    = document.getElementById('item-list');
+  const itemCount   = document.getElementById('item-count');
+  const clearDone   = document.getElementById('clear-done');
+  const syncDot     = document.getElementById('sync-indicator');
+  const modal       = document.getElementById('modal');
+  const modalName   = document.getElementById('modal-name');
+  const modalQty    = document.getElementById('modal-qty');
+  const modalCat    = document.getElementById('modal-cat');
+  const modalCancel = document.getElementById('modal-cancel');
+  const modalConfirm= document.getElementById('modal-confirm');
+
+  // ── Sync-Indikator ───────────────────────────────────────────────────────
+  function setSyncing() { syncDot.className = 'syncing'; }
+  function setOnline()  { syncDot.className = 'online'; }
+
+  // ── Realtime Listener ────────────────────────────────────────────────────
+  onValue(listRef, snapshot => {
+    items = snapshot.val() || {};
+    setOnline();
+    renderList();
+  });
+
+  // ── Rendern ──────────────────────────────────────────────────────────────
+  function renderList() {
+    const filtered = Object.entries(items).filter(([, v]) =>
+      activeCategory === 'all' || v.category === activeCategory
+    );
+
+    // Sortierung: offen zuerst, dann erledigt
+    filtered.sort((a, b) => {
+      if (a[1].done === b[1].done) return (a[1].createdAt || 0) - (b[1].createdAt || 0);
+      return a[1].done ? 1 : -1;
+    });
+
+    const total   = Object.keys(items).length;
+    const pending = Object.values(items).filter(i => !i.done).length;
+    itemCount.textContent = `${pending} offen · ${total} gesamt`;
+
+    if (filtered.length === 0) {
+      itemList.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">🛍️</div>
+          <p>Keine Artikel – füge etwas hinzu!</p>
+        </div>`;
+      return;
+    }
+
+    itemList.innerHTML = filtered.map(([id, item]) => `
+      <div class="item-card ${item.done ? 'done' : ''}" data-id="${id}">
+        <button class="check-btn" onclick="toggleDone('${id}', ${item.done})"></button>
+        <span class="item-name">${escHtml(item.name)}</span>
+        ${item.qty ? `<span class="item-qty">${escHtml(item.qty)}</span>` : ''}
+        <button class="delete-btn" onclick="deleteItem('${id}')">✕</button>
+      </div>
+    `).join('');
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Globale Handler (onclick im HTML) ────────────────────────────────────
+  window.toggleDone = (id, current) => {
+    setSyncing();
+    update(ref(db, `einkaufsliste/${id}`), { done: !current }).then(setOnline);
+  };
+
+  window.deleteItem = id => {
+    setSyncing();
+    remove(ref(db, `einkaufsliste/${id}`)).then(setOnline);
+  };
+
+  // ── Hinzufügen ───────────────────────────────────────────────────────────
+  function openModal(name) {
+    pendingName = name;
+    modalName.value = name;
+    modalQty.value  = '';
+    modalCat.value  = 'Sonstiges';
+    modal.classList.add('open');
+    modalQty.focus();
+  }
+
+  addBtn.addEventListener('click', () => {
+    const name = itemInput.value.trim();
+    if (!name) return;
+    openModal(name);
+    itemInput.value = '';
+  });
+
+  itemInput.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const name = itemInput.value.trim();
+    if (!name) return;
+    // Enter ohne Menge → direkt hinzufügen
+    addItem(name, '', activeCategory === 'all' ? 'Sonstiges' : activeCategory);
+    itemInput.value = '';
+  });
+
+  modalConfirm.addEventListener('click', () => {
+    const name = modalName.value.trim();
+    if (!name) return;
+    addItem(name, modalQty.value.trim(), modalCat.value);
+    modal.classList.remove('open');
+  });
+
+  modalCancel.addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+
+  modalName.addEventListener('keydown', e => { if (e.key === 'Enter') modalQty.focus(); });
+  modalQty.addEventListener('keydown',  e => { if (e.key === 'Enter') modalConfirm.click(); });
+
+  function addItem(name, qty, category) {
+    setSyncing();
+    push(listRef, {
+      name,
+      qty:       qty || null,
+      category:  category || 'Sonstiges',
+      done:      false,
+      createdAt: Date.now()
+    }).then(setOnline);
+  }
+
+  // ── Erledigte löschen ────────────────────────────────────────────────────
+  clearDone.addEventListener('click', () => {
+    const done = Object.entries(items).filter(([, v]) => v.done);
+    if (!done.length) return;
+    setSyncing();
+    Promise.all(done.map(([id]) => remove(ref(db, `einkaufsliste/${id}`)))).then(setOnline);
+  });
+
+  // ── Kategorie-Filter ─────────────────────────────────────────────────────
+  document.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      activeCategory = chip.dataset.cat;
+      renderList();
+    });
+  });
+</script>
+</body>
+</html>
